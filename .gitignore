@@ -1,3 +1,9 @@
+# Config Files
+src/credentials.h
+
+# Compiled Output
+target/
+
 # Prerequisites
 *.d
 
@@ -30,3 +36,6 @@
 *.exe
 *.out
 *.app
+
+# OSX
+.DS_Store

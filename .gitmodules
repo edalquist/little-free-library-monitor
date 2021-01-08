@@ -1,0 +1,13 @@
+[submodule "lib/MQTT"]
+	path = lib/MQTT
+	url = https://github.com/hirotakaster/MQTT.git
+[submodule "lib/PublishManager"]
+	path = lib/PublishManager
+	url = https://github.com/bveenema/PublishManager.git
+[submodule "lib/ArduinoJson"]
+	path = lib/ArduinoJson
+	url = https://github.com/bblanchon/ArduinoJson.git
+[submodule "lib/SparkFunMAX17043"]
+	path = lib/SparkFunMAX17043
+	url = https://github.com/edalquist/SparkFun_MAX17043_Particle_Library.git
+	branch = particle_workspace
