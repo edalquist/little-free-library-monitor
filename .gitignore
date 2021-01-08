@@ -3,6 +3,7 @@ src/credentials.h
 
 # Compiled Output
 target/
+*.bin
 
 # Prerequisites
 *.d
