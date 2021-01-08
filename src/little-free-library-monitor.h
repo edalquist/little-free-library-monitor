@@ -60,16 +60,8 @@ bool maybeSleep();
 char* jsptf(const char* format, ...);
 void publishJson(const char* topic, DynamicJsonDocument* doc, bool retain);
 
-static const bool MQTT_TESTING =
-    false;  // Set to true to prefix ALL MQTT topics with TEST/
-static const char* DEVICE_NAME =
-    "library_monitor-E";  // TODO get this from cloud and store in EEPROM
-static const char* MQTT_DEVICE_NAME = "little_free_library";
-static const char* HA_FRIENDLY_NAME = "Little Free Library";
-static const char* HA_DEVICE_MODEL = "photon";
 
-// Build device description
-static const char* MQTT_HA_DISCOVERY_TOPIC = "homeassistant";
+static const char* HA_DEVICE_MODEL = "photon";
 static const char* HA_BATTERY_VOLTAGE_ID = "battery_voltage";
 static const char* HA_BATTERY_SOC_ID = "battery_soc";
 static const char* HA_BATTERY_CHARGING_ID = "battery_charging";

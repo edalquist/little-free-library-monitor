@@ -440,15 +440,12 @@ uint8_t computeDoorState(uint8_t nc, uint8_t no) {
 
 bool charging = false;
 void updateBatteryStatus() {
-  // voltage = voltageAvg.add(lipo.getVoltage());
-  voltage =
-      EMA_ALPHA * lipo.getVoltage() +
-      (1 - EMA_ALPHA) *
-          voltage;      // lipo.getVoltage() returns a voltage value (e.g. 3.93)
-  soc = lipo.getSOC();  // lipo.getSOC() returns the estimated state of charge
-                        // (e.g. 79%)
-  alert = lipo.getAlert();  // lipo.getAlert() returns a 0 or 1 (0=alert not
-                            // triggered)
+  // lipo.getVoltage() returns a voltage value (e.g. 3.93)
+  voltage = EMA_ALPHA * lipo.getVoltage() + (1 - EMA_ALPHA) * voltage;
+  // lipo.getSOC() returns the estimated state of charge (e.g. 79%)
+  soc = lipo.getSOC();
+  // lipo.getAlert() returns a 0 or 1 (0=alert not triggered)
+  alert = lipo.getAlert();
 
   // Clear alerts when soc is back above 15%
   if (alert && soc > 15) {
