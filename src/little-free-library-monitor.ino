@@ -1,3 +1,4 @@
+#include "little-free-library-monitor.h"
 #include "credentials.h"
 #include "CircularBuffer.h"
 
@@ -16,111 +17,6 @@
 
 #include "math.h"
 #include <stdarg.h>
-
-// Header Like Section
-#define DOOR_OPEN   1
-#define DOOR_CLOS   2
-#define DOOR_UNKN   3
-
-struct doorcontact_t {
-    const uint8_t   nc_pin;
-    const uint8_t   no_pin;
-    uint8_t         state;
-    uint8_t         stateLast;
-    uint32_t        count;
-    unsigned long   lastDebounceTime;
-};
-
-struct doorevent_t {
-    bool        set = false;
-    uint8_t     state;
-    uint32_t    count;
-};
-
-struct batteryevent_t {
-    bool    set = false;
-    double  voltage;
-    double  soc;
-    bool    alert;
-    bool    charging;
-};
-
-struct wifievent_t {
-    bool    set = false;
-    int8_t  rssi;
-    float   strength;
-    float   quality;
-};
-
-struct mqttevent_t {
-    time_t                  timestamp = 0UL;
-    struct doorevent_t      doorEvent; 
-    struct batteryevent_t   batteryEvent;
-    struct wifievent_t      wifiEvent;
-};
-
-bool mqttConnect();
-void mqttCallback(char* topic, byte* payload, unsigned int length);
-bool readDoorState(struct doorcontact_t* doorState);
-uint8_t computeDoorState(uint8_t nc, uint8_t no);
-bool shouldConnect();
-void addDevice(DynamicJsonDocument* doc);
-void publishDiscovery();
-void updateBatteryStatus();
-void sendBatteryStatus();
-void updateWifiStatus();
-void sendWifiStatus();
-void updateDoorState();
-void sendMqttEvents();
-bool maybeSleep();
-char* jsptf(const char * format, ...);
-void publishJson(const char* topic, DynamicJsonDocument* doc, bool retain);
-
-
-static const bool MQTT_TESTING              = false;     // Set to true to prefix ALL MQTT topics with TEST/
-static const char* DEVICE_NAME              = "library_monitor-E"; // TODO get this from cloud and store in EEPROM
-static const char* MQTT_DEVICE_NAME         = "little_free_library";
-static const char* HA_FRIENDLY_NAME         = "Little Free Library";
-static const char* HA_DEVICE_MODEL          = "photon";
-
-// Build device description
-static const char* MQTT_HA_DISCOVERY_TOPIC  = "homeassistant";
-static const char* HA_BATTERY_VOLTAGE_ID    = "battery_voltage";
-static const char* HA_BATTERY_SOC_ID        = "battery_soc";
-static const char* HA_BATTERY_CHARGING_ID   = "battery_charging";
-static const char* HA_BATTERY_LOW_ID        = "battery_low";
-static const char* HA_DOOR_ID               = "door";
-static const char* HA_WIFI_STRENGTH_ID      = "wifi_strength";
-static const char* HA_WIFI_QUALITY_ID       = "wifi_quality";
-static const char* HA_NEXT_WAKE_ID          = "next_wake";
-static const char* HA_BATTERY_TOPIC         = "particle/ha/%s/battery";
-static const char* HA_DOOR_TOPIC            = "particle/ha/%s/door";
-static const char* HA_WIFI_TOPIC            = "particle/ha/%s/wifi";
-static const char* HA_SLEEP_TOPIC           = "particle/ha/%s/sleep";
-static const char* SLEEP_DELAY_TOPIC        = "particle/config/%s";
-
-
-static const int BATTERY_UPDATE_PCT_THRESHOLD       = 20;               // 20 == 00.20% point change
-static const std::chrono::duration<int, std::milli> EVENT_RATE_LIMIT_MILLIS = 250ms;
-static const std::chrono::duration<int> SLEEP_DELAY         = 5s;       // How long to wait after an event to sleep
-static const int SHORT_SLEEP_SOC_THRESHOLD                  = 70;       // at 70% start increasing
-static const std::chrono::duration<int> SHORT_SLEEP_DURATION= 5min;     // How long to sleep when SOC is above SHORT_SLEEP_SOC_THRESHOLD
-static const std::chrono::duration<int> LONG_SLEEP_DURATION = 60min;    // How long to sleep
-static const std::chrono::duration<int> CONNECT_INTERVAL    = 60s;      // How long to wait before ensuring MQTT server is connected
-static const std::chrono::duration<int> EVENT_REFRESH_INTRV = 5min;     // Repeat event if it hasn't happened in this time
-
-// How long to wait for the open/close relay to stabilze before reporting
-static const std::chrono::duration<int, std::milli> DEBOUNCE_DELAY_MILLIS = 500ms;
-
-// How many open/close events to queue at most
-static const size_t MAX_EVENT_QUEUE = 20;
-
-static const double EMA_ALPHA = 0.80;
-
-
-LEDStatus doorOpenLED(RGB_COLOR_RED, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
-LEDStatus doorClosedLED(RGB_COLOR_GREEN, LED_PATTERN_FADE, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
-LEDStatus sensorErrorLED(RGB_COLOR_ORANGE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 
 // Device Config
@@ -146,15 +42,15 @@ bool doorClosed; // True if door closed
 char configTopic[128];
 
 // local state
-unsigned long lastWifiEvent = 0UL;
-unsigned long lastBatteryEvent = 0UL;
+time32_t lastWifiEvent = 0UL;
+time32_t lastBatteryEvent = 0UL;
 double lastEventSoc = 0;
 double lastEventVoltage = 0;
-unsigned long lastDoorEvent = 0UL;
-unsigned long lastWake = 0UL;
-unsigned long lastEvent = 0UL;
-unsigned long lastConnect = 0UL;
-unsigned long sleepDelayOverride = 0UL;
+time32_t lastDoorEvent = 0UL;
+time32_t lastWake = 0UL;
+uint64_t lastMqttEventSent = 0UL;
+time32_t lastConnect = 0UL;
+time32_t sleepDelayOverride = 0UL;
 SystemSleepWakeupReason wakeReason = SystemSleepWakeupReason::BY_BLE; // using BLE as photon has no BLE so should never happen
 doorcontact_t doorState = { D2, D3, DOOR_UNKN, DOOR_UNKN, 0, 0UL };
 CircularBuffer<mqttevent_t> eventQueue(MAX_EVENT_QUEUE);
@@ -251,7 +147,7 @@ bool shouldConnect() {
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
     char p[length + 1];
     memcpy(p, payload, length);
-    p[length] = NULL;
+    p[length] = 0;
 
     publishManager.publish("mqtt/callback", topic);
     Log.info("MQTT: %s\n%s", topic, p);
@@ -268,7 +164,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         }
 
         sleepDelayOverride = doc["sleep_delay"];
-        Log.info("Sleep Delay Override: %d", sleepDelayOverride);
+        Log.info("Sleep Delay Override: %ld", sleepDelayOverride);
     }
 }
 
@@ -434,7 +330,7 @@ void updateDoorState() {
     }
 
     mqttevent_t mqttEvent;
-    mqttEvent.timestamp = Time.now();
+    mqttEvent.timestamp = System.millis();
     mqttEvent.doorEvent = { true, doorState.state, doorState.count };
     eventQueue.put(mqttEvent);
     lastDoorEvent = mqttEvent.timestamp;
@@ -451,7 +347,7 @@ void updateDoorState() {
 }
 
 bool readDoorState(struct doorcontact_t* doorState) {
-    const unsigned long millisRef = millis();
+    uint64_t millisRef = System.millis();
 
     uint8_t nc = digitalRead((*doorState).nc_pin);
     uint8_t no = digitalRead((*doorState).no_pin);
@@ -549,15 +445,15 @@ void updateWifiStatus() {
 time_t lastEventTimestamp = 0UL;
 void sendMqttEvents() {
     // Short-circuit if queue empty, no mqtt connect, or rate limited
-    if (eventQueue.empty() || !mqttConnect() || System.millis() <= (lastEvent + EVENT_RATE_LIMIT_MILLIS.count())) {
+    if (eventQueue.empty() || !mqttConnect() || System.millis() <= (lastMqttEventSent + EVENT_RATE_LIMIT_MILLIS.count())) {
         return;
     }
 
     // Don't send next event until the same amount of time has passed as between the original events OR 10s has passed as a fail-safe
-    if (lastEvent > 0
+    if (lastMqttEventSent > 0
             && lastEventTimestamp > 0
-            && !(System.millis() <= (lastEvent + 10000))
-            && (System.millis() - lastEvent) / 1000 > eventQueue.peek().timestamp - lastEventTimestamp) {
+            && !(System.millis() <= (lastMqttEventSent + 10000))
+            && (System.millis() - lastMqttEventSent) / 1000 > eventQueue.peek().timestamp - lastEventTimestamp) {
         return;
     }
     Log.info("Event Queue: %d", eventQueue.size());
@@ -593,7 +489,7 @@ void sendMqttEvents() {
         Log.error("UNKNOWN MQTT EVENT");
     }
 
-    lastEvent = System.millis();
+    lastMqttEventSent = System.millis();
     
     // Capture previous event timestamp and then zero out global var to signal we need a new event
     lastEventTimestamp = nextEvent.timestamp;
@@ -614,18 +510,17 @@ bool maybeSleep() {
         } else if (wakeReason == SystemSleepWakeupReason::BY_RTC) {
             Log.info("wake::RTC");
         } else {
-            Log.info("wake::%d", wakeReason);
+            Log.info("wake::%d", (uint16_t) wakeReason);
         }
         wakeReason = SystemSleepWakeupReason::BY_BLE;
     }
 
-    auto now = Time.now();
     if (digitalRead(D7) != HIGH // D7 is the force-awake pin
             && eventQueue.empty() // Nothing in the event queue
             && !shouldConnect() // No pending MQTT connection
             && emptyPublishQueue() // publish queue is empty
-            && now > (doorState.lastDebounceTime + SLEEP_DELAY.count()) // at least N since last state change
-            && now > (lastWake + SLEEP_DELAY.count() + sleepDelayOverride)) { // at least N since last wakeup
+            && System.millis() > (doorState.lastDebounceTime + SLEEP_DELAY.count()) // at least N since last state change
+            && Time.now() > (lastWake + SLEEP_DELAY.count() + sleepDelayOverride)) { // at least N since last wakeup
         
         // reset sleep delay override, it will get re-read if still on the MQTT server after wakeup
         sleepDelayOverride = 0UL;
@@ -651,8 +546,8 @@ bool maybeSleep() {
                 nextWakeStr.c_str(),
                 sleepDuration,
                 Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL).c_str(),
-                now - lastWake);
-        Log.info("sleep::STOP %s", sleepMsg);
+                Time.now() - lastWake);
+        Log.info("sleep::STOP %s", sleepMsg.c_str());
         Particle.publish("sleep::STOP", sleepMsg);
 
         SystemSleepConfiguration config;
@@ -695,7 +590,7 @@ void publishJson(const char* topic, DynamicJsonDocument* doc, bool retain) {
     char output[measureJson(*doc) + 1];
     serializeJson(*doc, output, sizeof(output));
 
-    Log.info("MQTT: %s\t%s", formattedTopic, output);
+    Log.info("MQTT: %s\t%s", formattedTopic.c_str(), output);
     mqttClient.publish(formattedTopic, output, retain);
     publishManager.publish("mqtt/publishJson", formattedTopic);
 }
