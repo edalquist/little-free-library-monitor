@@ -242,6 +242,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_BATTERY_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.voltage }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = true;
   publishJson(jsptf("%s/sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_BATTERY_VOLTAGE_ID),
               &doc, true);
@@ -255,6 +256,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_BATTERY_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.soc }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = true;
   publishJson(jsptf("%s/sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_BATTERY_SOC_ID),
               &doc, true);
@@ -267,6 +269,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_BATTERY_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.charging }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = true;
   publishJson(jsptf("%s/binary_sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_BATTERY_CHARGING_ID),
               &doc, true);
@@ -279,6 +282,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_BATTERY_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.alert }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = true;
   publishJson(jsptf("%s/binary_sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_BATTERY_LOW_ID),
               &doc, true);
@@ -291,6 +295,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_DOOR_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.state }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = true;
   publishJson(jsptf("%s/binary_sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_DOOR_ID),
               &doc, true);
@@ -304,6 +309,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_WIFI_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.strength }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = true;
   publishJson(jsptf("%s/sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_WIFI_STRENGTH_ID),
               &doc, true);
@@ -317,6 +323,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_WIFI_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.quality }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = true;
   publishJson(jsptf("%s/sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_WIFI_QUALITY_ID),
               &doc, true);
@@ -330,6 +337,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_SLEEP_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.next_wake | timestamp_local }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = true;
   publishJson(jsptf("%s/sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_NEXT_WAKE_ID),
               &doc, true);
