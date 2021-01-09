@@ -2,7 +2,7 @@
 
 Using a Particle Photon to monitor the use of our little free library. A magnetic contact sensor on the door triggers
 the Photon to send updated via MQTT to a Home Assistant service.
-[Photos of Setup](https://photos.google.com/album/AF1QipPHDW3iUdu1Ugqbixq3_dPn7eGMZKW9jqxLb1ks)
+[Photos of Setup](https://photos.google.com/share/AF1QipN5xh3hu_HO4zXRZLLBMUYIvoRR8gYFrqdjjhFlartGJoHF_7nDE2l5T03hNQTMsQ?key=NlczaDVhcS1wTExfV0xsc3lONEVtWWJIeG9KbnhR)
 
 ## Configure and Build
 
