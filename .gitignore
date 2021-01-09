@@ -1,6 +1,9 @@
 # Config Files
 src/credentials.h
 
+# Generated Files
+src/little-free-library-monitor.cpp
+
 # Compiled Output
 target/
 *.bin
