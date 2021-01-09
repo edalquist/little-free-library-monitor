@@ -265,6 +265,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_BATTERY_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.voltage }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = (bool)true;
   publishJson(jsptf("%s/sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_BATTERY_VOLTAGE_ID),
               &doc, true);
@@ -278,6 +279,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_BATTERY_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.soc }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = (bool)true;
   publishJson(jsptf("%s/sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_BATTERY_SOC_ID),
               &doc, true);
@@ -290,6 +292,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_BATTERY_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.charging }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = (bool)true;
   publishJson(jsptf("%s/binary_sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_BATTERY_CHARGING_ID),
               &doc, true);
@@ -302,6 +305,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_BATTERY_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.alert }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = (bool)true;
   publishJson(jsptf("%s/binary_sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_BATTERY_LOW_ID),
               &doc, true);
@@ -314,6 +318,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_DOOR_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.state }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = (bool)true;
   publishJson(jsptf("%s/binary_sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_DOOR_ID),
               &doc, true);
@@ -327,6 +332,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_WIFI_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.strength }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = (bool)true;
   publishJson(jsptf("%s/sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_WIFI_STRENGTH_ID),
               &doc, true);
@@ -340,6 +346,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_WIFI_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.quality }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = (bool)true;
   publishJson(jsptf("%s/sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_WIFI_QUALITY_ID),
               &doc, true);
@@ -353,6 +360,7 @@ void publishDiscovery() {
   doc["state_topic"] = jsptf(HA_SLEEP_TOPIC, MQTT_DEVICE_NAME);
   doc["value_template"] = "{{ value_json.next_wake | timestamp_local }}";
   doc["expire_after"] = expiration;
+  doc["force_update"] = (bool)true;
   publishJson(jsptf("%s/sensor/%s/%s/config", MQTT_HA_DISCOVERY_TOPIC,
                     MQTT_DEVICE_NAME, HA_NEXT_WAKE_ID),
               &doc, true);
@@ -374,7 +382,7 @@ void updateDoorState() {
   mqttEvent.timestamp = System.millis();
   mqttEvent.doorEvent = {true, doorState.state, doorState.count};
   eventQueue.put(mqttEvent);
-  lastDoorEvent = mqttEvent.timestamp;
+  lastDoorEvent = Time.now();
 
   if (doorState.state == DOOR_OPEN) {
     doorOpenLED.setActive(true);
@@ -440,12 +448,15 @@ uint8_t computeDoorState(uint8_t nc, uint8_t no) {
 
 bool charging = false;
 void updateBatteryStatus() {
-  // lipo.getVoltage() returns a voltage value (e.g. 3.93)
-  voltage = EMA_ALPHA * lipo.getVoltage() + (1 - EMA_ALPHA) * voltage;
-  // lipo.getSOC() returns the estimated state of charge (e.g. 79%)
-  soc = lipo.getSOC();
-  // lipo.getAlert() returns a 0 or 1 (0=alert not triggered)
-  alert = lipo.getAlert();
+  // voltage = voltageAvg.add(lipo.getVoltage());
+  voltage =
+      EMA_ALPHA * lipo.getVoltage() +
+      (1 - EMA_ALPHA) *
+          voltage;      // lipo.getVoltage() returns a voltage value (e.g. 3.93)
+  soc = lipo.getSOC();  // lipo.getSOC() returns the estimated state of charge
+                        // (e.g. 79%)
+  alert = lipo.getAlert();  // lipo.getAlert() returns a 0 or 1 (0=alert not
+                            // triggered)
 
   // Clear alerts when soc is back above 15%
   if (alert && soc > 15) {
@@ -466,10 +477,10 @@ void updateBatteryStatus() {
     lastEventVoltage = voltage;
 
     mqttevent_t mqttEvent;
-    mqttEvent.timestamp = Time.now();
+    mqttEvent.timestamp = System.millis();
     mqttEvent.batteryEvent = {true, voltage, soc, alert, charging};
     eventQueue.put(mqttEvent);
-    lastBatteryEvent = mqttEvent.timestamp;
+    lastBatteryEvent = Time.now();
   }
 }
 
@@ -484,11 +495,11 @@ void updateWifiStatus() {
   WiFiSignal sig = WiFi.RSSI();
 
   mqttevent_t mqttEvent;
-  mqttEvent.timestamp = Time.now();
+  mqttEvent.timestamp = System.millis();
   mqttEvent.wifiEvent = {true, (int8_t)WiFi.RSSI(), sig.getStrengthValue(),
                          sig.getQualityValue()};
   eventQueue.put(mqttEvent);
-  lastWifiEvent = mqttEvent.timestamp;
+  lastWifiEvent = Time.now();
 }
 
 time_t lastEventTimestamp = 0UL;

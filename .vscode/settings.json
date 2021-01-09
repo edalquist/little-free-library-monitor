@@ -6,5 +6,6 @@
         "*.ino": "cpp"
     },
     "particle.firmwareVersion": "2.0.1",
-    "particle.targetPlatform": "photon"
+    "particle.targetPlatform": "photon",
+    "particle.targetDevice": "library_monitor-A"
 }
