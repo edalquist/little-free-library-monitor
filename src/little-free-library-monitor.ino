@@ -192,7 +192,7 @@ bool mqttConnect() {
   if (!mqttClient.isConnected()) {
     // connection failed
     // TODO need to rate limit these in case of a bad connection
-    publishManager.publish("mqtt/log", "connection failed");
+    // publishManager.publish("mqtt/log", "connection failed");
     Log.error("MQTT: Connect Failed");
     return false;
   }
@@ -201,7 +201,7 @@ bool mqttConnect() {
   Log.info("MQTT: Subscribed - %s", configTopic);
 
   lastConnect = Time.now();
-  publishManager.publish("mqtt/connection", "established");
+  // publishManager.publish("mqtt/connection", "established");
   Log.info("MQTT: Connected");
   return true;
 }
@@ -639,5 +639,5 @@ void publishJson(const char* topic, DynamicJsonDocument* doc, bool retain) {
 
   Log.info("MQTT: %s\t%s", formattedTopic.c_str(), output);
   mqttClient.publish(formattedTopic, output, retain);
-  publishManager.publish("mqtt/publishJson", formattedTopic);
+  // publishManager.publish("mqtt/publishJson", formattedTopic);
 }

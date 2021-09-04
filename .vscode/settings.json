@@ -5,7 +5,7 @@
     "files.associations": {
         "*.ino": "cpp"
     },
-    "particle.firmwareVersion": "2.0.1",
+    "particle.firmwareVersion": "3.1.0",
     "particle.targetPlatform": "photon",
-    "particle.targetDevice": "library_monitor-A"
+    "particle.targetDevice": "library_monitor-E"
 }
