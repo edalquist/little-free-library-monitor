@@ -11,3 +11,15 @@
 	path = lib/SparkFunMAX17043
 	url = https://github.com/edalquist/SparkFun_MAX17043_Particle_Library.git
 	branch = particle_workspace
+[submodule "lib/ParticleSoftSerial"]
+	path = lib/ParticleSoftSerial
+	url = https://github.com/ScruffR/ParticleSoftSerial.git
+[submodule "lib/SparkIntervalTimer"]
+	path = lib/SparkIntervalTimer
+	url = https://github.com/pkourany/SparkIntervalTimer.git
+[submodule "lib/papertrail"]
+	path = lib/papertrail
+	url = https://github.com/barakwei/ParticlePapertrail.git
+[submodule "lib/Particle_Adafruit_VC0706"]
+	path = lib/Particle_Adafruit_VC0706
+	url = https://github.com/edalquist/Particle-Photon-Adafruit-VC0706-Serial-Camera-Library

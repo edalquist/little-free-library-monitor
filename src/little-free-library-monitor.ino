@@ -16,6 +16,11 @@
 #include <MQTT.h>
 #include <stdarg.h>
 
+// This #include statement was automatically added by the Particle IDE.
+#include <Particle_Adafruit_VC0706.h>
+
+#include <papertrail.h>
+
 #include "math.h"
 
 // Device Config
@@ -23,9 +28,16 @@ SYSTEM_THREAD(ENABLED);
 STARTUP(WiFi.selectAntenna(ANT_AUTO));
 STARTUP(Particle.publishVitals(LONG_SLEEP_DURATION));
 
+PapertrailLogHandler papertailHandler("logs5.papertrailapp.com", 31106, DEVICE_NAME);
+
 // MQTT Client Setup
 MQTT mqttClient(MQTT_SERVER, MQTT_PORT, mqttCallback, 512);
 bool mqttDiscoveryPublished = false;
+
+// Camera Setup
+// ParticleSoftSerial cameraconnection = ParticleSoftSerial(D2, D3);
+#define cameraconnection Serial1
+Adafruit_VC0706 cam = Adafruit_VC0706(&cameraconnection);
 
 // Setup logging
 SerialLogHandler logHandler;
@@ -112,9 +124,55 @@ void setup() {
   waitFor(Time.isValid, 30000);
 
   lastWake = Time.now();
+
+  // Try to locate the camera
+  if (!cam.begin()) {
+    Log.info("No camera found?");
+  } else {
+    Log.info("Camera Found:");
+
+    // Print out the camera version information (optional)
+    char *reply = cam.getVersion();
+    if (reply == 0) {
+      Serial.print("Failed to get version");
+    } else {
+      Log.info("-----------------");
+      Serial.print(reply);
+      Log.info("-----------------");
+    }
+
+    // Set the picture size - you can choose one of 640x480, 320x240 or 160x120 
+    // Remember that bigger pictures take longer to transmit!
+    
+    //cam.setImageSize(VC0706_640x480);        // biggest
+    cam.setImageSize(VC0706_320x240);        // medium
+    //cam.setImageSize(VC0706_160x120);          // small
+
+    // You can read the size back from the camera (optional, but maybe useful?)
+    uint8_t imgsize = cam.getImageSize();
+    Serial.print("Image size: ");
+    if (imgsize == VC0706_640x480) Log.info("640x480");
+    if (imgsize == VC0706_320x240) Log.info("320x240");
+    if (imgsize == VC0706_160x120) Log.info("160x120");
+
+
+    //  Motion detection system can alert you when the camera 'sees' motion!
+    cam.setMotionDetect(true);           // turn it on
+    //cam.setMotionDetect(false);        // turn it off   (default)
+
+    // You can also verify whether motion detection is active!
+    Serial.print("Motion detection is ");
+    if (cam.getMotionDetect()) 
+      Log.info("ON");
+    else 
+      Log.info("OFF");
+  }
 }
 
 void loop() {
+  if (cam.motionDetected()) {
+    Log.info("motion!");
+  }
   publishManager.process();
   updateDoorState();
 
@@ -149,7 +207,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   memcpy(p, payload, length);
   p[length] = 0;
 
-  publishManager.publish("mqtt/callback", topic);
+  // publishManager.publish("mqtt/callback", topic);
   Log.info("MQTT: %s\n%s", topic, p);
 
   // TODO cache this in a global?
@@ -164,6 +222,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
 
     sleepDelayOverride = doc["sleep_delay"];
+    if (sleepDelayOverride > 0) {
+      publishManager.publish("mqtt/sleep_delay", jsptf("%ld", sleepDelayOverride));
+    }
     Log.info("Sleep Delay Override: %ld", sleepDelayOverride);
   }
 }
@@ -596,7 +657,7 @@ bool maybeSleep() {
         Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL).c_str(),
         Time.now() - lastWake);
     Log.info("sleep::STOP %s", sleepMsg.c_str());
-    Particle.publish("sleep::STOP", sleepMsg);
+    // Particle.publish("sleep::STOP", sleepMsg);
 
     SystemSleepConfiguration config;
     config.mode(SystemSleepMode::STOP)
