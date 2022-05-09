@@ -3,9 +3,14 @@
     "C_Cpp.default.configurationProvider": "particle.particle-vscode-core",
     "cortex-debug.openocdPath": "${command:particle.getDebuggerOpenocdPath}",
     "files.associations": {
-        "*.ino": "cpp"
+        "*.ino": "cpp",
+        "bitset": "cpp",
+        "optional": "cpp",
+        "algorithm": "cpp",
+        "memory": "cpp"
     },
     "particle.firmwareVersion": "3.3.0",
     "particle.targetPlatform": "photon",
-    "particle.targetDevice": "library_monitor-A"
+    "particle.targetDevice": "library_monitor-A",
+    "cmake.configureOnOpen": true
 }

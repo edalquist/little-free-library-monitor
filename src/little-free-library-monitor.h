@@ -74,7 +74,7 @@ static const char* HA_BATTERY_TOPIC = "particle/ha/%s/battery";
 static const char* HA_DOOR_TOPIC = "particle/ha/%s/door";
 static const char* HA_WIFI_TOPIC = "particle/ha/%s/wifi";
 static const char* HA_SLEEP_TOPIC = "particle/ha/%s/sleep";
-static const char* SLEEP_DELAY_TOPIC = "particle/config/%s";
+static const char* CONFIG_TOPIC = "particle/config/%s";
 
 static const int BATTERY_UPDATE_PCT_THRESHOLD =
     20;  // 20 == 00.20% point change

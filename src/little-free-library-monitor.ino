@@ -28,6 +28,8 @@ SYSTEM_THREAD(ENABLED);
 STARTUP(WiFi.selectAntenna(ANT_AUTO));
 STARTUP(Particle.publishVitals(LONG_SLEEP_DURATION));
 
+// Setup logging
+// SerialLogHandler logHandler;
 PapertrailLogHandler papertailHandler("logs5.papertrailapp.com", 31106, DEVICE_NAME);
 
 // MQTT Client Setup
@@ -39,8 +41,10 @@ bool mqttDiscoveryPublished = false;
 #define cameraconnection Serial1
 Adafruit_VC0706 cam = Adafruit_VC0706(&cameraconnection);
 
-// Setup logging
-SerialLogHandler logHandler;
+// Image Server Client
+TCPClient imageServerClient;
+byte imageServerIP[] = { 192, 168, 0, 165 }; // laptop
+
 
 // Particle Variables
 double voltage = 0;  // LiPo voltage
@@ -60,6 +64,8 @@ time32_t lastWake = 0UL;
 uint64_t lastMqttEventSent = 0UL;
 time32_t lastConnect = 0UL;
 time32_t sleepDelayOverride = 0UL;
+uint16_t prevPictureIdx = 0;
+uint16_t nextPictureIdx = 0;
 SystemSleepWakeupReason wakeReason =
     SystemSleepWakeupReason::BY_BLE;  // using BLE as photon has no BLE so
                                       // should never happen
@@ -87,7 +93,7 @@ void watchdogHandler() {
 }
 
 void setup() {
-  snprintf(configTopic, sizeof(configTopic), SLEEP_DELAY_TOPIC,
+  snprintf(configTopic, sizeof(configTopic), CONFIG_TOPIC,
            MQTT_DEVICE_NAME);
 
   // After 60s of no loop completion reset the device
@@ -144,8 +150,8 @@ void setup() {
     // Set the picture size - you can choose one of 640x480, 320x240 or 160x120 
     // Remember that bigger pictures take longer to transmit!
     
-    //cam.setImageSize(VC0706_640x480);        // biggest
-    cam.setImageSize(VC0706_320x240);        // medium
+    cam.setImageSize(VC0706_640x480);        // biggest
+    // cam.setImageSize(VC0706_320x240);        // medium
     //cam.setImageSize(VC0706_160x120);          // small
 
     // You can read the size back from the camera (optional, but maybe useful?)
@@ -157,8 +163,8 @@ void setup() {
 
 
     //  Motion detection system can alert you when the camera 'sees' motion!
-    cam.setMotionDetect(true);           // turn it on
-    //cam.setMotionDetect(false);        // turn it off   (default)
+    // cam.setMotionDetect(true);           // turn it on
+    cam.setMotionDetect(false);        // turn it off   (default)
 
     // You can also verify whether motion detection is active!
     Serial.print("Motion detection is ");
@@ -169,10 +175,52 @@ void setup() {
   }
 }
 
+bool takingPicture = false;
+uint16_t jpglen;
 void loop() {
-  if (cam.motionDetected()) {
-    Log.info("motion!");
+  if (!takingPicture && nextPictureIdx > prevPictureIdx) {
+    Log.info("Taking a picture %d > %d", nextPictureIdx, prevPictureIdx);
+    prevPictureIdx = nextPictureIdx;
+    takingPicture = cam.takePicture();
+    if (takingPicture) {
+      jpglen = cam.frameLength();
+      Log.info("Picture taken! %d bytes", jpglen);
+      takingPicture = imageServerClient.connect(imageServerIP, 1215);
+      if (takingPicture) {
+        Log.info("Image Server Connected: %s", imageServerClient.remoteIP().toString().c_str());
+        imageServerClient.println("UPPER_CAMERA");
+        imageServerClient.printlnf("%d", jpglen);
+      } else {
+        Log.info("Image Server Failed");
+      }
+    } else {
+      Log.info("Picture Failed");
+    }
   }
+
+  if (takingPicture) {
+    // read 64 bytes at a time;
+    uint8_t *buffer;
+    uint8_t bytesToRead = min((uint16_t)64, jpglen); // change 32 to 64 for a speedup but may not work with all setups!
+    buffer = cam.readPicture(bytesToRead);
+    size_t bytesWritten = imageServerClient.write(buffer, bytesToRead, 500);
+    if (bytesWritten == -1) {
+      Log.warn("Image Server Failed");
+      jpglen = 0;
+    } else if (bytesToRead != bytesWritten) {
+      Log.warn("Read %d != Write %d", bytesToRead, bytesWritten);
+    }
+      // TODO if bytesWritten<bytesToRead TROUBLE
+
+    jpglen -= bytesToRead;
+    if (jpglen <= 0) {
+      Log.info("Image Stored");
+      takingPicture = false;
+      imageServerClient.stop();
+      cam.resumeVideo();
+    }
+  }
+
   publishManager.process();
   updateDoorState();
 
@@ -190,8 +238,10 @@ void loop() {
   updateWifiStatus();
   sendMqttEvents();
 
-  if (!maybeSleep()) {
-    delay(7);
+  if (!takingPicture) {
+    if (!maybeSleep()) {
+      delay(7);
+    }
   }
 }
 
@@ -200,6 +250,7 @@ bool shouldConnect() {
 }
 
 /**
+ * 
  * Called by MQTT library when a subscribed topic is updated.
  */
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -226,6 +277,13 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       publishManager.publish("mqtt/sleep_delay", jsptf("%ld", sleepDelayOverride));
     }
     Log.info("Sleep Delay Override: %ld", sleepDelayOverride);
+
+    bool enableMotionDetection = doc["motion_detection"];
+    cam.setMotionDetect(enableMotionDetection);
+    Log.info("Motion Detection: %s", enableMotionDetection ? "true" : "false");
+
+    nextPictureIdx = doc["next_photo"];
+    Log.info("Next Picture Index: %d", nextPictureIdx);
   }
 }
 
@@ -415,6 +473,7 @@ void updateDoorState() {
       Time.now() <= (lastDoorEvent + EVENT_REFRESH_INTRV.count())) {
     return;
   }
+  nextPictureIdx++;
 
   mqttevent_t mqttEvent;
   mqttEvent.timestamp = System.millis();
@@ -619,6 +678,7 @@ bool maybeSleep() {
   }
 
   if (digitalRead(D7) != HIGH  // D7 is the force-awake pin
+      && !takingPicture        // Not actively taking a picture
       && eventQueue.empty()    // Nothing in the event queue
       && !shouldConnect()      // No pending MQTT connection
       && emptyPublishQueue()   // publish queue is empty
