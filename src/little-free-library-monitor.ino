@@ -37,9 +37,10 @@ MQTT mqttClient(MQTT_SERVER, MQTT_PORT, mqttCallback, 512);
 bool mqttDiscoveryPublished = false;
 
 // Camera Setup
-// ParticleSoftSerial cameraconnection = ParticleSoftSerial(D2, D3);
-#define cameraconnection Serial1
-Adafruit_VC0706 cam = Adafruit_VC0706(&cameraconnection);
+ParticleSoftSerial camOneConn(A2, WKP);
+#define camTwoCon Serial1
+Adafruit_VC0706 cam = Adafruit_VC0706(&camOneConn);
+// Adafruit_VC0706 camTwo = Adafruit_VC0706(&camTwoCon);
 
 // Image Server Client
 TCPClient imageServerClient;
@@ -125,7 +126,8 @@ void setup() {
   // We can alert at anywhere between 1% - 32%:
   lipo.setThreshold(5);
 
-  delay(2000);
+  delay(5000);
+  Log.info("-----------------");
 
   waitFor(Time.isValid, 30000);
 
@@ -204,7 +206,7 @@ void loop() {
     uint8_t bytesToRead = min((uint16_t)64, jpglen); // change 32 to 64 for a speedup but may not work with all setups!
     buffer = cam.readPicture(bytesToRead);
     size_t bytesWritten = imageServerClient.write(buffer, bytesToRead, 500);
-    if (bytesWritten == -1) {
+    if (bytesWritten < 0) {
       Log.warn("Image Server Failed");
       jpglen = 0;
     } else if (bytesToRead != bytesWritten) {
