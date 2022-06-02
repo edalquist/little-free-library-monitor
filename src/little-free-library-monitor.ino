@@ -29,18 +29,20 @@ STARTUP(WiFi.selectAntenna(ANT_AUTO));
 STARTUP(Particle.publishVitals(LONG_SLEEP_DURATION));
 
 // Setup logging
-// SerialLogHandler logHandler;
-PapertrailLogHandler papertailHandler("logs5.papertrailapp.com", 31106, DEVICE_NAME);
+SerialLogHandler logHandler;
+// PapertrailLogHandler papertailHandler("logs5.papertrailapp.com", 31106, DEVICE_NAME);
 
 // MQTT Client Setup
 MQTT mqttClient(MQTT_SERVER, MQTT_PORT, mqttCallback, 512);
 bool mqttDiscoveryPublished = false;
 
 // Camera Setup
-ParticleSoftSerial camOneConn(A2, WKP);
+ParticleSoftSerial camOneConn(/*rx*/ A2, /*tx*/ WKP);
+Adafruit_VC0706 camOne(&camOneConn);
+
 #define camTwoCon Serial1
-Adafruit_VC0706 cam = Adafruit_VC0706(&camOneConn);
-// Adafruit_VC0706 camTwo = Adafruit_VC0706(&camTwoCon);
+Adafruit_VC0706 camTwo(&camTwoCon);
+
 
 // Image Server Client
 TCPClient imageServerClient;
@@ -70,7 +72,7 @@ uint16_t nextPictureIdx = 0;
 SystemSleepWakeupReason wakeReason =
     SystemSleepWakeupReason::BY_BLE;  // using BLE as photon has no BLE so
                                       // should never happen
-doorcontact_t doorState = {D2, D3, DOOR_UNKN, DOOR_UNKN, 0, 0UL};
+doorcontact_t doorState = {D6, D5, DOOR_UNKN, DOOR_UNKN, 0, 0UL};
 CircularBuffer<mqttevent_t> eventQueue(MAX_EVENT_QUEUE);
 
 char formatBuffer[128];
@@ -133,31 +135,49 @@ void setup() {
 
   lastWake = Time.now();
 
-  // Try to locate the camera
-  if (!cam.begin()) {
-    Log.info("No camera found?");
+  if (!camTwo.begin()) {
+    Log.info("camTwo: NOT FOUND");
   } else {
-    Log.info("Camera Found:");
+    Log.info("camTwo: FOUND");
+  }
+
+  // Try to locate the camera
+  // cam.setBaud19200();
+  if (!camOne.begin(19200)) { //19200
+    // delay(1);
+    // camOne.reset();
+    // delay(1);
+    // camOne.setBaud19200();
+    // delay(1);
+    // camOne.reset();
+    Log.info("camOne: NOT FOUND");
+  } else {
+    Log.info("camOne: FOUND");
 
     // Print out the camera version information (optional)
-    char *reply = cam.getVersion();
+    char *reply = camOne.getVersion();
     if (reply == 0) {
       Serial.print("Failed to get version");
     } else {
-      Log.info("-----------------");
-      Serial.print(reply);
-      Log.info("-----------------");
+      Log.info("\n-----------------\n%s\n-----------------", reply);
     }
 
     // Set the picture size - you can choose one of 640x480, 320x240 or 160x120 
     // Remember that bigger pictures take longer to transmit!
     
-    cam.setImageSize(VC0706_640x480);        // biggest
+    camOne.setImageSize(VC0706_640x480);        // biggest
     // cam.setImageSize(VC0706_320x240);        // medium
     //cam.setImageSize(VC0706_160x120);          // small
 
+    delay(1);
+    camOne.reset();
+    delay(1);
+    camOne.setBaud19200();
+    delay(1);
+    camOne.reset();
+
     // You can read the size back from the camera (optional, but maybe useful?)
-    uint8_t imgsize = cam.getImageSize();
+    uint8_t imgsize = camOne.getImageSize();
     Serial.print("Image size: ");
     if (imgsize == VC0706_640x480) Log.info("640x480");
     if (imgsize == VC0706_320x240) Log.info("320x240");
@@ -166,11 +186,11 @@ void setup() {
 
     //  Motion detection system can alert you when the camera 'sees' motion!
     // cam.setMotionDetect(true);           // turn it on
-    cam.setMotionDetect(false);        // turn it off   (default)
+    camOne.setMotionDetect(false);        // turn it off   (default)
 
     // You can also verify whether motion detection is active!
     Serial.print("Motion detection is ");
-    if (cam.getMotionDetect()) 
+    if (camOne.getMotionDetect()) 
       Log.info("ON");
     else 
       Log.info("OFF");
@@ -183,9 +203,9 @@ void loop() {
   if (!takingPicture && nextPictureIdx > prevPictureIdx) {
     Log.info("Taking a picture %d > %d", nextPictureIdx, prevPictureIdx);
     prevPictureIdx = nextPictureIdx;
-    takingPicture = cam.takePicture();
+    takingPicture = camOne.takePicture();
     if (takingPicture) {
-      jpglen = cam.frameLength();
+      jpglen = camOne.frameLength();
       Log.info("Picture taken! %d bytes", jpglen);
       takingPicture = imageServerClient.connect(imageServerIP, 1215);
       if (takingPicture) {
@@ -204,7 +224,7 @@ void loop() {
     // read 64 bytes at a time;
     uint8_t *buffer;
     uint8_t bytesToRead = min((uint16_t)64, jpglen); // change 32 to 64 for a speedup but may not work with all setups!
-    buffer = cam.readPicture(bytesToRead);
+    buffer = camOne.readPicture(bytesToRead);
     size_t bytesWritten = imageServerClient.write(buffer, bytesToRead, 500);
     if (bytesWritten < 0) {
       Log.warn("Image Server Failed");
@@ -219,7 +239,7 @@ void loop() {
       Log.info("Image Stored");
       takingPicture = false;
       imageServerClient.stop();
-      cam.resumeVideo();
+      camOne.resumeVideo();
     }
   }
 
@@ -281,7 +301,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Log.info("Sleep Delay Override: %ld", sleepDelayOverride);
 
     bool enableMotionDetection = doc["motion_detection"];
-    cam.setMotionDetect(enableMotionDetection);
+    camOne.setMotionDetect(enableMotionDetection);
     Log.info("Motion Detection: %s", enableMotionDetection ? "true" : "false");
 
     nextPictureIdx = doc["next_photo"];
@@ -531,16 +551,16 @@ bool readDoorState(struct doorcontact_t* doorState) {
 
 uint8_t computeDoorState(uint8_t nc, uint8_t no) {
   if (nc == no) {
-    Log.info("nc: %d", nc);
-    Log.info("no: %d", no);
+    // Log.info("nc: %d", nc);
+    // Log.info("no: %d", no);
     return DOOR_UNKN;
   } else if (nc == LOW) {
     return DOOR_OPEN;
   } else if (no == LOW) {
     return DOOR_CLOS;
   } else {
-    Log.info("nc: %d", nc);
-    Log.info("no: %d", no);
+    // Log.info("nc: %d", nc);
+    // Log.info("no: %d", no);
     return DOOR_UNKN;
   }
 }
